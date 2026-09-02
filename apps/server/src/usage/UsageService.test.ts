@@ -178,8 +178,13 @@ describe("UsageService", () => {
       assert.strictEqual(ratesFetches, 1);
 
       // An explicit refresh fetches again so a newly listed model gets priced.
-      yield* service.readSummary({ ...WINDOW, refreshRates: true });
+      // A burst of refreshes shares that one fetch.
+      const [refreshed] = yield* Effect.all([service.refreshRates, service.refreshRates], {
+        concurrency: 2,
+      });
       assert.strictEqual(ratesFetches, 2);
+      assert.strictEqual(refreshed.status, "fresh");
+      assert.strictEqual(refreshed.knownModels, 1);
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );
 

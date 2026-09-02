@@ -185,12 +185,6 @@ export const UsageSummaryInput = Schema.Struct({
   sinceTime: Schema.optional(TrimmedNonEmptyString),
   /** Exclusive UTC instant for an hourly rolling window. */
   untilTime: Schema.optional(TrimmedNonEmptyString),
-  /**
-   * Refetch the model rate table even if the cached copy is inside its TTL.
-   * Sent by an explicit refresh so a newly released model gets priced without
-   * waiting a day.
-   */
-  refreshRates: Schema.optional(Schema.Boolean),
 });
 export type UsageSummaryInput = typeof UsageSummaryInput.Type;
 

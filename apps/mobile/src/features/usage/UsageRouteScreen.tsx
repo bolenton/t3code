@@ -79,13 +79,9 @@ export function UsageRouteScreen() {
       window: makeWindow(days, undefined, days === 1 ? "hour" : "day"),
     });
   };
-  // An explicit refresh also asks every environment to refetch model pricing,
-  // so a model released since the last daily fetch stops reading as $0.
-  // Selecting a range never sets the flag: only the user's refresh does.
   const refreshWindow = () => {
     const nextWindow = makeWindow(windowDays, undefined, isPast24Hours ? "hour" : "day");
     if (
-      window.refreshRates === true &&
       nextWindow.sinceDay === window.sinceDay &&
       nextWindow.untilDay === window.untilDay &&
       nextWindow.sinceTime === window.sinceTime &&
@@ -93,7 +89,7 @@ export function UsageRouteScreen() {
     ) {
       refresh();
     } else {
-      setWindowSelection({ days: windowDays, window: { ...nextWindow, refreshRates: true } });
+      setWindowSelection({ days: windowDays, window: nextWindow });
     }
   };
 
