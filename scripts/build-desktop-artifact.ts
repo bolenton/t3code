@@ -941,6 +941,19 @@ export const MAC_FILE_EXCLUSIONS = [
   "!**/node_modules/node-pty/prebuilds/win32-*/**/*",
   "!**/node_modules/node-pty/third_party/conpty/**/*",
 ] as const;
+
+// node-pty publishes both Darwin prebuilds in one package. Single-architecture
+// apps only need the native target; universal apps need both. An omitted arch
+// preserves the existing common exclusions for callers that only inspect the
+// generic platform config.
+export function resolveMacFileExclusions(arch?: typeof BuildArch.Type) {
+  if (arch === undefined || arch === "universal") {
+    return [...MAC_FILE_EXCLUSIONS];
+  }
+
+  const unusedArch = arch === "arm64" ? "x64" : "arm64";
+  return [...MAC_FILE_EXCLUSIONS, `!**/node_modules/node-pty/prebuilds/darwin-${unusedArch}/**/*`];
+}
 // Windows ships the server tree (bundle + node_modules) as a separate
 // resources/server.asar sidecar instead of loose files: the NSIS installer
 // then extracts a handful of large archives instead of thousands of small
@@ -1730,16 +1743,18 @@ export const preflightWindowsDesktopBuild = Effect.fn("preflightWindowsDesktopBu
               rustTargetIsInstalled(rustTarget),
             ]).pipe(Effect.map(([cargo, target]) => cargo && target)),
         python: Effect.succeed(python !== undefined),
-        msvc: desktopBuildProbeSucceeds(
-          ChildProcess.make("powershell.exe", [
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            windowsVswherePrerequisiteScript(input.arch),
-          ]),
-          "Visual Studio Build Tools",
-        ),
+        msvc: reuseResourceMonitor
+          ? Effect.succeed(true)
+          : desktopBuildProbeSucceeds(
+              ChildProcess.make("powershell.exe", [
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                windowsVswherePrerequisiteScript(input.arch),
+              ]),
+              "Visual Studio Build Tools",
+            ),
         tar: input.bundlesWslRuntime
           ? desktopBuildProbeSucceeds(ChildProcess.make("tar.exe", ["--version"]), "tar")
           : Effect.succeed(true),
@@ -2426,13 +2441,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   // sidecar staging skips the archive in that case, and listing a resource
   // whose source file was never written fails the electron-builder step.
   wslRuntimeBundled = false,
+  arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
-    files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
+    files: [
+      ...DESKTOP_FILE_EXCLUSIONS,
+      ...(platform === "mac" ? resolveMacFileExclusions(arch) : []),
+    ],
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -3500,6 +3519,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
           }
         : undefined,
       bundlesWslRuntime({ arch: options.arch, prebuildPath: options.wslPrebuild }),
+      options.arch,
     ),
     dependencies: stageDependencies,
     devDependencies: {

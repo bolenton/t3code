@@ -96,6 +96,7 @@ import {
 } from "../ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SidebarInset } from "../ui/sidebar";
+import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -371,6 +372,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         title: string;
         defaultModelSelection: ModelSelection | null;
         defaultThreadEnvMode: ThreadEnvMode | null;
+        autoPull: boolean;
         faviconPath: string | null;
       }>,
       failureTitle: string,
@@ -461,6 +463,13 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
         { defaultThreadEnvMode: mode },
         "Failed to update new-thread workspace",
       ),
+    [updateAllMembers],
+  );
+
+  const autoPull = representative.autoPull ?? false;
+  const setAutoPull = useCallback(
+    (enabled: boolean) =>
+      void updateAllMembers({ autoPull: enabled }, "Failed to update automatic pull setting"),
     [updateAllMembers],
   );
 
@@ -715,8 +724,10 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                 ]
               : [`This removes ${members.length} grouped project entries.`]),
             ...(projectThreads.length > 0
-              ? ["This permanently clears conversation history for those threads."]
-              : []),
+              ? [
+                  "This permanently clears conversation history for those threads and any archived threads.",
+                ]
+              : ["This permanently clears any archived conversation history."]),
             isWholeGroup
               ? "This removes only the project entries, not the files on disk."
               : "Other entries in this grouped project are unaffected.",
@@ -738,7 +749,7 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
             environmentId: member.environmentId,
             input: {
               projectId: member.id,
-              ...(memberThreads.length > 0 ? { force: true } : {}),
+              force: true,
             },
           }),
           () => undefined,
@@ -936,6 +947,17 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                   <SelectItem value="local">{resolveEnvModeLabel("local")}</SelectItem>
                 </SelectPopup>
               </Select>
+            }
+          />
+          <SettingsRow
+            title="Automatically pull"
+            description="Keeps the default branch current in the background when the checkout has no local changes or commits."
+            control={
+              <Switch
+                checked={autoPull}
+                aria-label="Automatically pull the default branch"
+                onCheckedChange={setAutoPull}
+              />
             }
           />
         </SettingsSection>

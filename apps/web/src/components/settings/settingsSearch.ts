@@ -95,6 +95,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["transparent transparency solid menus dialogs composer"],
   },
   {
+    id: "panel-animations",
+    title: "Panel animations",
+    to: "/settings/appearance",
+  },
+  {
     id: "environment-identification",
     title: "Environment identification",
     to: "/settings/appearance",
@@ -192,6 +197,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["installed cli versions newer available codex claude cursor grok opencode"],
   },
   {
+    id: "continue-threads-after-server-update",
+    title: "Continue threads after server updates",
+    to: "/settings/general",
+    searchTerms: ["resume running active work restart desktop update automatically"],
+  },
+  {
     id: "background-activity",
     title: "Background activity",
     to: "/settings/general",
@@ -262,6 +273,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["build plan composer old"],
   },
   {
+    id: "legacy-context-window-indicator",
+    title: "Context window indicator (legacy)",
+    to: "/settings/general",
+    searchTerms: ["composer meter usage tokens circle old"],
+  },
+  {
     id: "legacy-token-streaming",
     title: "Stream token by token (legacy)",
     to: "/settings/general",
@@ -299,6 +316,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Agent browser access",
     to: "/settings/integrations",
     searchTerms: ["allow open drive preview tools sessions"],
+  },
+  {
+    id: "browser-profiles",
+    title: "Browser profiles",
+    to: "/settings/integrations",
+    targetId: "browser",
+  },
+  {
+    id: "browser-default-profile",
+    title: "Default browser profile",
+    to: "/settings/integrations",
+    targetId: "browser",
   },
   {
     id: "browser-default-viewport",
