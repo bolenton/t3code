@@ -63,6 +63,9 @@ const LITELLM_RATES_URL =
 /** Rates move rarely; a day-old table keeps the page working offline. */
 const RATES_TTL_MS = 24 * 60 * 60 * 1000;
 
+/** An explicit refresh ignores the TTL, but not a table fetched this recently. */
+const RATES_REFRESH_FLOOR_MS = 60 * 1000;
+
 /**
  * Files are filtered by mtime before opening. The slack covers a session whose
  * last write lands just before local midnight on the window's first day.
@@ -141,11 +144,15 @@ export const make = Effect.gen(function* () {
   /**
    * Loads the LiteLLM rate table, preferring a fresh copy and falling back to
    * the on-disk snapshot. With neither, every model reports as unpriced rather
-   * than the page failing.
+   * than the page failing. `force` refetches inside the TTL so a model that
+   * LiteLLM added since the last fetch gets priced now.
    */
-  const ensureRates = Effect.fn("UsageService.ensureRates")(function* () {
+  const ensureRates = Effect.fn("UsageService.ensureRates")(function* (force: boolean) {
     const now = yield* Clock.currentTimeMillis;
-    if (ratesFetchedAtMs !== null && now - ratesFetchedAtMs < RATES_TTL_MS) return;
+    if (ratesFetchedAtMs !== null) {
+      const age = now - ratesFetchedAtMs;
+      if (age < (force ? RATES_REFRESH_FLOOR_MS : RATES_TTL_MS)) return;
+    }
 
     if (ratesFetchedAtMs === null) {
       const fromDisk = yield* fileSystem.readFileString(ratesCachePath).pipe(
@@ -158,7 +165,7 @@ export const make = Effect.gen(function* () {
           rates = parsed;
           ratesFetchedAtMs = fromDisk.fetchedAtMs;
           ratesStatus = "cached";
-          if (now - fromDisk.fetchedAtMs < RATES_TTL_MS) return;
+          if (!force && now - fromDisk.fetchedAtMs < RATES_TTL_MS) return;
         }
       }
     }
@@ -425,9 +432,10 @@ export const make = Effect.gen(function* () {
     // Pricing only matters once records are aggregated, so the rate table
     // loads while transcripts stream instead of gating them: a cold rates
     // fetch on a slow network no longer delays the scan by its own timeout.
-    const [, scannedDirs] = yield* Effect.all([ensureRates(), collectDirs(windowStartMs)], {
-      concurrency: 2,
-    });
+    const [, scannedDirs] = yield* Effect.all(
+      [ensureRates(input.refreshRates === true), collectDirs(windowStartMs)],
+      { concurrency: 2 },
+    );
 
     const aggregator = new UsageAggregator({
       timeZone: input.timeZone,
@@ -539,6 +547,7 @@ export const make = Effect.gen(function* () {
       input.resolution ?? "day",
       input.sinceTime ?? null,
       input.untilTime ?? null,
+      input.refreshRates === true,
     ]);
 
   const readSummary = Effect.fn("UsageService.readSummary")(function* (input: UsageSummaryInput) {
