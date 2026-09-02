@@ -703,7 +703,12 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
     !toolPresentation && expanded && row.workEntry.command?.trim() ? "Command" : previewText;
   const iconIsDestructive = row.icon === "alert" || row.icon === "warning";
   const failed = row.status === "failure";
-  const icon = toolPresentation?.icon ?? (failed ? "xmark" : workRowSymbolName(row.icon));
+  const toolIcon = row.workEntry.toolIcon ?? row.workEntry.toolSource?.icon;
+  const hasSpecialToolIcon =
+    toolPresentation !== null || row.workEntry.toolSurface !== undefined || toolIcon !== undefined;
+  const icon =
+    toolPresentation?.icon ??
+    (failed && !hasSpecialToolIcon ? "xmark" : workRowSymbolName(row.icon));
 
   return (
     <Animated.View
@@ -737,12 +742,12 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
               label={displayText}
               showIcon
               themeAppearance={props.themeAppearance}
-              toolIcon={row.workEntry.toolIcon ?? row.workEntry.toolSource?.icon}
+              toolIcon={toolIcon}
             />
           ) : (
             <>
               <View className="h-6 w-6 shrink-0 items-center justify-center">
-                {failed ? (
+                {failed && !hasSpecialToolIcon ? (
                   <WorkLogIcon
                     icon={icon}
                     color={iconIsDestructive ? "#e11d48" : props.iconSubtleColor}
@@ -750,7 +755,7 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
                 ) : (
                   <ToolActivityIconView
                     environmentId={props.environmentId}
-                    icon={row.workEntry.toolIcon ?? row.workEntry.toolSource?.icon}
+                    icon={toolIcon}
                     fallback={icon}
                     fallbackColor={props.iconSubtleColor}
                     themeAppearance={props.themeAppearance}
@@ -775,7 +780,7 @@ const ThreadWorkLogRow = memo(function ThreadWorkLogRow(
                 Copied
               </Text>
             ) : null}
-            {failed && toolPresentation ? (
+            {failed && hasSpecialToolIcon ? (
               <View
                 className="h-4 w-4 items-center justify-center"
                 accessibilityElementsHidden
