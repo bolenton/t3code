@@ -807,6 +807,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         Effect.forkChild,
       );
       const longIntentTitle = `  ${"a".repeat(39)}   ${"a".repeat(38)}😀bc  `;
+      const serializedOverContractUrl = `https://example.com/?query=${"😀".repeat(400)}`;
 
       yield* runtime.emit({
         id: asEventId("evt-computer-start"),
@@ -871,12 +872,16 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
                 "codex/toolSurface": {
                   kind: "browserUse",
                   backend: "chrome",
-                  screenshot: {
-                    pageUrl: "https://www.mathworks.com/help/matlab/",
-                    faviconUrl: "https://www.mathworks.com/favicon.ico",
-                    faviconUrlDark: "https://www.mathworks.com/favicon-dark.ico",
-                  },
+                  openTabs: [
+                    {
+                      pageUrl: "https://www.mathworks.com/help/matlab/",
+                      faviconUrl: "https://www.mathworks.com/favicon.ico",
+                      faviconUrlDark: "https://www.mathworks.com/favicon-dark.ico",
+                      url: "https://www.mathworks.com/help/matlab/",
+                    },
+                  ],
                 },
+                browser_use: { url: serializedOverContractUrl },
               },
               content: [],
             },
@@ -994,6 +999,8 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
       const maxLengthAppId = `com.${"a".repeat(508)}`;
+      const collidingMaxLengthAppId = `com.${"a".repeat(507)}b`;
+      const longAppSourceKeys: string[] = [];
       const items = [
         {
           type: "commandExecution",
@@ -1025,6 +1032,24 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
               "codex/toolSurface": {
                 kind: "computerUse",
                 app: { kind: "appId", appId: maxLengthAppId },
+              },
+            },
+            content: [],
+          },
+          status: "failed",
+        },
+        {
+          type: "mcpToolCall",
+          id: "failed-computer-collision",
+          server: "computer-use",
+          tool: "click",
+          arguments: { app: "Other" },
+          error: { message: "Click failed" },
+          result: {
+            _meta: {
+              "codex/toolSurface": {
+                kind: "computerUse",
+                app: { kind: "appId", appId: collidingMaxLengthAppId },
               },
             },
             content: [],
@@ -1065,11 +1090,14 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           return;
         }
         NodeAssert.equal(firstEvent.value.payload.status, item.status);
-        if (item.id === "failed-computer") {
+        if (item.id.startsWith("failed-computer")) {
           NodeAssert.equal(firstEvent.value.payload.title, "computer-use · click");
-          NodeAssert.equal(firstEvent.value.payload.toolSource?.key.length, 512);
+          const sourceKey = firstEvent.value.payload.toolSource?.key;
+          NodeAssert.equal(sourceKey?.length, 512);
+          if (sourceKey) longAppSourceKeys.push(sourceKey);
         }
       }
+      NodeAssert.equal(new Set(longAppSourceKeys).size, 2);
     }),
   );
 

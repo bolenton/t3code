@@ -30,6 +30,7 @@ import {
   ProviderSendTurnInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as NodeCrypto from "node:crypto";
 import * as Crypto from "effect/Crypto";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -169,7 +170,10 @@ function normalizedHttpUrl(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length > 4096) return undefined;
   try {
     const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+    const href = url.href;
+    return (url.protocol === "http:" || url.protocol === "https:") && href.length <= 4096
+      ? href
+      : undefined;
   } catch {
     return undefined;
   }
@@ -206,7 +210,10 @@ function normalizedSourceKeyPart(value: string): string {
 }
 
 function nativeAppSourceKey(appId: string): string {
-  return `native-app:${appId.toLowerCase()}`.slice(0, 512);
+  const key = `native-app:${appId.toLowerCase()}`;
+  if (key.length <= 512) return key;
+  const digest = NodeCrypto.createHash("sha256").update(key).digest("hex");
+  return `${key.slice(0, 512 - digest.length - 1)}:${digest}`;
 }
 
 function browserDisplayName(value: unknown): string | undefined {
