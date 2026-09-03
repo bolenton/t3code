@@ -3,6 +3,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
 
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -65,6 +66,7 @@ const serviceLayers = (input: {
   readonly home: string;
   readonly settings: Parameters<typeof ServerSettings.layerTest>[0];
   readonly onRatesFetch?: () => void;
+  readonly xdgDataHome?: string;
 }) =>
   ServerConfig.layerTest(process.cwd(), { prefix: input.prefix }).pipe(
     Layer.provideMerge(NodeServices.layer),
@@ -83,12 +85,45 @@ const serviceLayers = (input: {
       ),
     ),
     Layer.provideMerge(
-      Layer.succeed(HostProcessEnvironment, { GROK_HOME: NodePath.join(input.home, "grok") }),
+      Layer.succeed(HostProcessEnvironment, {
+        GROK_HOME: NodePath.join(input.home, "grok"),
+        // Pin OpenCode's store to a missing dir unless a test opts in, so the
+        // developer's real opencode.db never leaks into assertions.
+        XDG_DATA_HOME: input.xdgDataHome ?? NodePath.join(input.home, "xdg-missing"),
+      }),
     ),
   );
 
 function totalOutputTokens(summary: { buckets: readonly { totals: { outputTokens: number } }[] }) {
   return summary.buckets.reduce((sum, bucket) => sum + bucket.totals.outputTokens, 0);
+}
+
+function seedOpencodeDb(dbPath: string): void {
+  const db = new NodeSqlite.DatabaseSync(dbPath);
+  try {
+    db.exec(
+      "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)",
+    );
+    const at = Date.parse("2026-08-01T10:00:00Z");
+    db.prepare(
+      "INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      "msg_opencode_1",
+      "ses_opencode_1",
+      at,
+      at,
+      JSON.stringify({
+        role: "assistant",
+        modelID: "muse-spark-test",
+        providerID: "opencode",
+        cost: 0.012,
+        tokens: { input: 700, output: 200, reasoning: 50, cache: { write: 10, read: 90 } },
+        time: { created: at, completed: at },
+      }),
+    );
+  } finally {
+    db.close();
+  }
 }
 
 describe("UsageService", () => {
@@ -107,6 +142,40 @@ describe("UsageService", () => {
       yield* Effect.promise(() => NodeFSP.appendFile(transcript, claudeLine(2, 7)));
       const second = yield* service.readSummary(WINDOW);
       assert.strictEqual(totalOutputTokens(second), 12);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("includes OpenCode usage from its SQLite store", () =>
+    Effect.gen(function* () {
+      const { settings, home } = yield* setup;
+      const xdg = NodePath.join(home, "xdg");
+      yield* Effect.promise(() =>
+        NodeFSP.mkdir(NodePath.join(xdg, "opencode"), { recursive: true }),
+      );
+      const opencodeDbPath = NodePath.join(xdg, "opencode", "opencode.db");
+      yield* Effect.sync(() => seedOpencodeDb(opencodeDbPath));
+
+      const service = yield* UsageService.make.pipe(
+        Effect.provide(
+          serviceLayers({
+            prefix: "usage-service-opencode-test",
+            home,
+            settings,
+            xdgDataHome: xdg,
+          }),
+        ),
+      );
+
+      const summary = yield* service.readSummary(WINDOW);
+      const opencode = summary.buckets.filter((bucket) => bucket.provider === "opencode");
+      assert.strictEqual(opencode.length, 1);
+      assert.strictEqual(opencode[0]?.model, "muse-spark-test");
+      assert.strictEqual(opencode[0]?.totals.outputTokens, 200);
+      assert.strictEqual(opencode[0]?.totals.cachedInputTokens, 90);
+      assert.strictEqual(opencode[0]?.costUsd, 0.012);
+      assert.strictEqual(opencode[0]?.costSource, "providerReported");
+      const source = summary.sources.find((entry) => entry.fingerprint.provider === "opencode");
+      assert.strictEqual(source?.status, "ok");
     }).pipe(Effect.scoped),
   );
 

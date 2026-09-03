@@ -2,8 +2,9 @@
  * UsageService - scans provider transcripts and returns priced usage buckets.
  *
  * The scan reads the provider CLIs' own session files (Claude Code, Codex, and
- * Grok Build) rather than T3 Code's orchestration projections, so usage covers
- * turns driven outside T3 Code too. This is the approach `ccusage` takes.
+ * Grok Build transcripts, plus OpenCode's SQLite message store) rather than
+ * T3 Code's orchestration projections, so usage covers turns driven outside
+ * T3 Code too. This is the approach `ccusage` takes.
  *
  * Transcripts are append-only, so parsed records are memoised per file by
  * `(size, mtime)`. A cold 30-day scan of ~1.4 GB lands around 2-3 seconds; warm
@@ -42,6 +43,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
+import { resolveOpencodeDbPath, scanOpencodeDb } from "./usageOpencodeDb.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
 import {
   listTranscriptFiles,
@@ -343,6 +345,8 @@ export const make = Effect.gen(function* () {
     readonly provider: UsageProviderKind;
     readonly dir: string;
     readonly volumeId: string;
+    /** Bounded failure detail when the source could not be read at all. */
+    readonly scanError: string | null;
     /** Parsed records per file, or `null` when the directory does not exist. */
     readonly files:
       | readonly { readonly path: string; readonly records: readonly UsageRecord[] }[]
@@ -360,7 +364,7 @@ export const make = Effect.gen(function* () {
         .exists(dir)
         .pipe(Effect.catchCause(() => Effect.succeed(false)));
       if (!exists) {
-        scanned.push({ provider, dir, volumeId, files: null });
+        scanned.push({ provider, dir, volumeId, scanError: null, files: null });
         continue;
       }
       const files = yield* Effect.promise(() =>
@@ -371,7 +375,43 @@ export const make = Effect.gen(function* () {
         const records = yield* readFileRecords(file.path, file.size, file.mtimeMs, provider);
         parsedFiles.push({ path: file.path, records });
       }
-      scanned.push({ provider, dir, volumeId, files: parsedFiles });
+      scanned.push({ provider, dir, volumeId, scanError: null, files: parsedFiles });
+    }
+    // OpenCode keeps no transcript files; its sessions live in a SQLite store
+    // that is queried fresh every scan (one indexed query, no resume state).
+    const opencodeDbPath = resolveOpencodeDbPath({
+      xdgDataHome: hostEnvironment["XDG_DATA_HOME"],
+      homedir: NodeOS.homedir(),
+      join: (...parts) => path.join(...parts),
+    });
+    const opencodeVolumeId = yield* Effect.promise(() =>
+      readDirectoryVolumeId(path.dirname(opencodeDbPath)),
+    );
+    const opencodeScan = yield* Effect.sync(() => scanOpencodeDb(opencodeDbPath, windowStartMs));
+    if (opencodeScan.kind === "missing") {
+      scanned.push({
+        provider: "opencode",
+        dir: opencodeDbPath,
+        volumeId: opencodeVolumeId,
+        scanError: null,
+        files: null,
+      });
+    } else if (opencodeScan.kind === "failed") {
+      scanned.push({
+        provider: "opencode",
+        dir: opencodeDbPath,
+        volumeId: opencodeVolumeId,
+        scanError: opencodeScan.message,
+        files: [],
+      });
+    } else {
+      scanned.push({
+        provider: "opencode",
+        dir: opencodeDbPath,
+        volumeId: opencodeVolumeId,
+        scanError: null,
+        files: [{ path: opencodeDbPath, records: opencodeScan.records }],
+      });
     }
     return scanned;
   });
@@ -442,7 +482,19 @@ export const make = Effect.gen(function* () {
     const livePaths = new Set<string>();
     const walkedRoots: string[] = [];
 
-    for (const { provider, dir, volumeId, files } of scannedDirs) {
+    for (const { provider, dir, volumeId, scanError, files } of scannedDirs) {
+      if (scanError !== null) {
+        sources.push({
+          fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
+          status: "failed",
+          scannedFiles: 0,
+          skippedFiles: 0,
+          malformedRecords: 0,
+          distinctSessions: 0,
+          message: scanError,
+        });
+        continue;
+      }
       if (files === null) {
         sources.push({
           fingerprint: { hostId, provider, resolvedHomePath: dir, volumeId },
@@ -451,7 +503,10 @@ export const make = Effect.gen(function* () {
           skippedFiles: 0,
           malformedRecords: 0,
           distinctSessions: 0,
-          message: "No transcript directory on this environment.",
+          message:
+            provider === "opencode"
+              ? "No OpenCode database on this environment."
+              : "No transcript directory on this environment.",
         });
         continue;
       }
