@@ -47,7 +47,13 @@ function assistantData(overrides: Record<string, unknown> = {}): string {
 
 function seedDb(
   dbPath: string,
-  rows: ReadonlyArray<{ id: string; sessionId: string; timeCreated: number; data: string }>,
+  rows: ReadonlyArray<{
+    id: string;
+    sessionId: string;
+    timeCreated: number;
+    timeUpdated?: number;
+    data: string;
+  }>,
 ): void {
   NodeFS.mkdirSync(NodePath.dirname(dbPath), { recursive: true });
   const db = new NodeSqlite.DatabaseSync(dbPath);
@@ -59,7 +65,13 @@ function seedDb(
       "INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)",
     );
     for (const row of rows) {
-      insert.run(row.id, row.sessionId, row.timeCreated, row.timeCreated, row.data);
+      insert.run(
+        row.id,
+        row.sessionId,
+        row.timeCreated,
+        row.timeUpdated ?? row.timeCreated,
+        row.data,
+      );
     }
   } finally {
     db.close();
@@ -146,16 +158,28 @@ describe("parseOpencodeMessageRow", () => {
 describe("resolveOpencodeDbPath", () => {
   const join = (...parts: string[]): string => NodePath.join(...parts);
 
-  it("honours XDG_DATA_HOME and falls back to the documented default", () => {
-    expect(resolveOpencodeDbPath({ xdgDataHome: "  /data  ", homedir: "/home/u", join })).toBe(
+  it("honours an absolute XDG_DATA_HOME and falls back to the documented default", () => {
+    const input = { homedir: "/home/u", join, isAbsolute: NodePath.isAbsolute };
+    expect(resolveOpencodeDbPath({ ...input, xdgDataHome: "  /data  " })).toBe(
       "/data/opencode/opencode.db",
     );
-    expect(resolveOpencodeDbPath({ xdgDataHome: "   ", homedir: "/home/u", join })).toBe(
+    expect(resolveOpencodeDbPath({ ...input, xdgDataHome: "   " })).toBe(
       "/home/u/.local/share/opencode/opencode.db",
     );
-    expect(resolveOpencodeDbPath({ xdgDataHome: undefined, homedir: "/home/u", join })).toBe(
+    expect(resolveOpencodeDbPath({ ...input, xdgDataHome: undefined })).toBe(
       "/home/u/.local/share/opencode/opencode.db",
     );
+  });
+
+  it("ignores a relative XDG_DATA_HOME per the XDG specification", () => {
+    expect(
+      resolveOpencodeDbPath({
+        xdgDataHome: "data",
+        homedir: "/home/u",
+        join,
+        isAbsolute: NodePath.isAbsolute,
+      }),
+    ).toBe("/home/u/.local/share/opencode/opencode.db");
   });
 });
 
@@ -180,10 +204,41 @@ describe("scanOpencodeDb", () => {
     expect(scan.records.map((record) => record.dedupeKey)).toEqual(["msg_in"]);
   });
 
+  it("keeps a turn created before the window but completed inside it", () => {
+    const dir = makeTempDir();
+    const dbPath = NodePath.join(dir, "opencode", "opencode.db");
+    const sinceMs = 1788407901900;
+    seedDb(dbPath, [
+      {
+        id: "msg_slow",
+        sessionId: "ses_1",
+        timeCreated: sinceMs - 100_000,
+        timeUpdated: sinceMs + 1_000,
+        data: assistantData({
+          time: { created: sinceMs - 100_000, completed: sinceMs + 1_000 },
+        }),
+      },
+    ]);
+
+    const scan = scanOpencodeDb(dbPath, sinceMs);
+    expect(scan.kind).toBe("ok");
+    if (scan.kind !== "ok") return;
+    expect(scan.records.map((record) => record.dedupeKey)).toEqual(["msg_slow"]);
+  });
+
   it("reports missing for an absent database", () => {
     expect(scanOpencodeDb(NodePath.join(makeTempDir(), "opencode.db"), 0)).toEqual({
       kind: "missing",
     });
+  });
+
+  it("reports failed for a directory at the database path", () => {
+    const dir = makeTempDir();
+    const scan = scanOpencodeDb(NodePath.join(dir, "opencode.db"), 0);
+    NodeFS.mkdirSync(NodePath.join(dir, "opencode.db"));
+    const dirScan = scanOpencodeDb(NodePath.join(dir, "opencode.db"), 0);
+    expect(scan.kind).toBe("missing");
+    expect(dirScan.kind).toBe("failed");
   });
 
   it("reports failed for a database without the message table", () => {

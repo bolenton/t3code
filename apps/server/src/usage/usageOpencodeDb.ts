@@ -48,9 +48,15 @@ export function resolveOpencodeDbPath(input: {
   readonly xdgDataHome: string | undefined;
   readonly homedir: string;
   readonly join: (...parts: string[]) => string;
+  readonly isAbsolute: (path: string) => boolean;
 }): string {
   const dataHome = input.xdgDataHome?.trim() ?? "";
-  const base = dataHome.length > 0 ? dataHome : input.join(input.homedir, ".local", "share");
+  // Per the XDG specification a relative XDG_DATA_HOME is invalid and must be
+  // ignored, otherwise the lookup silently resolves against the server's cwd.
+  const base =
+    dataHome.length > 0 && input.isAbsolute(dataHome)
+      ? dataHome
+      : input.join(input.homedir, ".local", "share");
   return input.join(base, "opencode", "opencode.db");
 }
 
@@ -121,6 +127,11 @@ export function parseOpencodeMessageRow(row: OpencodeMessageRow): UsageRecord | 
 /**
  * Reads assistant-message usage from OpenCode's store.
  *
+ * This is a single synchronous query by design: a real 30-day window scans in
+ * tens of milliseconds (667 rows / ~4 MB measured), a fraction of the scan's
+ * existing multi-second budget, so a worker thread would be machinery without
+ * a problem. Revisit if message volumes grow by orders of magnitude.
+ *
  * `missing` means there is no database at `dbPath` (or it has no `message`
  * table, as with pre-SQLite OpenCode storage). Anything else that goes wrong
  * is `failed` with a bounded message; the caller reports it as a source
@@ -150,9 +161,13 @@ export function scanOpencodeDb(dbPath: string, sinceMs: number): OpencodeDbScan 
     }
     const rows = db
       .prepare(
-        "SELECT id, session_id AS sessionId, data FROM message WHERE time_created >= ? ORDER BY time_created",
+        // Turns are bucketed by completion time, which can lag creation well
+        // past the prefilter: a turn created before the window but completed
+        // inside it updates its row, so time_updated catches it. The
+        // aggregator still drops anything outside the window after parsing.
+        "SELECT id, session_id AS sessionId, data FROM message WHERE time_created >= ? OR time_updated >= ? ORDER BY time_created",
       )
-      .all(sinceMs) as Array<{ id: unknown; sessionId: unknown; data: unknown }>;
+      .all(sinceMs, sinceMs) as Array<{ id: unknown; sessionId: unknown; data: unknown }>;
     const records: UsageRecord[] = [];
     for (const row of rows) {
       if (typeof row.id !== "string" || typeof row.data !== "string") continue;
@@ -185,13 +200,15 @@ function errorMessage(error: unknown): string | null {
 
 /**
  * Only a genuinely absent database reads as `missing`; anything else is
- * `failed`. `node:sqlite` reports a missing file as a generic
- * `ERR_SQLITE_ERROR` with an "unable to open database file" message, so the
- * message is matched alongside the code.
+ * `failed`. `node:sqlite` surfaces a stable numeric `errcode` alongside its
+ * generic `ERR_SQLITE_ERROR` code: 14 is `SQLITE_CANTOPEN` (absent path),
+ * while a directory at the path reports a different extended code ("disk I/O
+ * error") and must stay `failed` rather than vanish as `missing`.
  */
 function isMissingDatabaseError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
   const fields = error as Record<string, unknown>;
+  if (typeof fields["errcode"] === "number") return fields["errcode"] === 14;
   if (typeof fields["code"] === "string" && fields["code"].includes("CANTOPEN")) return true;
   const message = fields["message"];
   return typeof message === "string" && /unable to open database file|no such file/i.test(message);

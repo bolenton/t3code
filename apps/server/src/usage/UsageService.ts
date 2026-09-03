@@ -383,6 +383,7 @@ export const make = Effect.gen(function* () {
       xdgDataHome: hostEnvironment["XDG_DATA_HOME"],
       homedir: NodeOS.homedir(),
       join: (...parts) => path.join(...parts),
+      isAbsolute: (part) => path.isAbsolute(part),
     });
     const opencodeVolumeId = yield* Effect.promise(() =>
       readDirectoryVolumeId(path.dirname(opencodeDbPath)),
