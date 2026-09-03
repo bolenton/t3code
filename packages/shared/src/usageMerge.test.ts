@@ -41,6 +41,7 @@ function summary(
     homePath: string;
     volumeId?: string;
     distinctSessions?: number;
+    status?: UsageSummary["sources"][number]["status"];
   }[],
   contractVersion: number = USAGE_CONTRACT_VERSION,
 ): UsageSummary {
@@ -58,7 +59,7 @@ function summary(
         resolvedHomePath: source.homePath,
         volumeId: source.volumeId ?? `vol-${source.hostId}`,
       },
-      status: "ok" as const,
+      status: source.status ?? ("ok" as const),
       scannedFiles: 1,
       skippedFiles: 0,
       malformedRecords: 0,
@@ -145,6 +146,29 @@ describe("mergeUsage", () => {
         merged.providers.map((provider) => [provider.provider, provider.sessions]),
       ),
     ).toEqual({ claude: 1, codex: 1 });
+  });
+
+  it("lets a healthy environment keep a directory its peer failed to read", () => {
+    // A failed scan contributes no buckets, so it must not win the
+    // fingerprint race and hide the peer's successful read.
+    const shared = {
+      provider: "opencode" as const,
+      hostId: "mac",
+      homePath: "/home/u/.local/share/opencode/opencode.db",
+    };
+    const merged = mergeUsage(
+      [
+        environment("env-a", summary([], [{ ...shared, status: "failed" as const }])),
+        environment(
+          "env-b",
+          summary([bucket({ provider: "opencode", model: "muse-spark-test" })], [shared]),
+        ),
+      ],
+      USAGE_CONTRACT_VERSION,
+    );
+
+    expect(merged.costUsd).toBe(10);
+    expect(merged.contributingEnvironments).toEqual(["env-b"]);
   });
 
   it("excludes an environment reporting an older contract version", () => {

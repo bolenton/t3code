@@ -15,6 +15,7 @@
  *
  * @module usageOpencodeDb
  */
+import * as NodeFS from "node:fs";
 import * as NodeSqlite from "node:sqlite";
 
 import type { UsageTokenTotals } from "@t3tools/contracts";
@@ -132,17 +133,26 @@ export function parseOpencodeMessageRow(row: OpencodeMessageRow): UsageRecord | 
  * existing multi-second budget, so a worker thread would be machinery without
  * a problem. Revisit if message volumes grow by orders of magnitude.
  *
- * `missing` means there is no database at `dbPath` (or it has no `message`
- * table, as with pre-SQLite OpenCode storage). Anything else that goes wrong
- * is `failed` with a bounded message; the caller reports it as a source
+ * `missing` means there is no database at `dbPath`. Anything else that goes
+ * wrong is `failed` with a bounded message; the caller reports it as a source
  * status rather than failing the whole page.
  */
 export function scanOpencodeDb(dbPath: string, sinceMs: number): OpencodeDbScan {
+  // Existence decides missing vs failed before SQLite is involved: its open
+  // errors conflate "absent path" with "present but unreadable" (wrong
+  // permissions, a directory at the path), and only the former may read as
+  // missing. Anything present-but-unreadable is a failed source carrying the
+  // real error, never a silent "no database here".
+  try {
+    NodeFS.statSync(dbPath);
+  } catch {
+    return { kind: "missing" };
+  }
+
   let db: NodeSqlite.DatabaseSync;
   try {
     db = new NodeSqlite.DatabaseSync(dbPath, { open: true, readOnly: true });
   } catch (error) {
-    if (isMissingDatabaseError(error)) return { kind: "missing" };
     return {
       kind: "failed",
       message: errorMessage(error) ?? "OpenCode database could not be read.",
@@ -196,20 +206,4 @@ function errorMessage(error: unknown): string | null {
     return error.message.trim().slice(0, 200);
   }
   return null;
-}
-
-/**
- * Only a genuinely absent database reads as `missing`; anything else is
- * `failed`. `node:sqlite` surfaces a stable numeric `errcode` alongside its
- * generic `ERR_SQLITE_ERROR` code: 14 is `SQLITE_CANTOPEN` (absent path),
- * while a directory at the path reports a different extended code ("disk I/O
- * error") and must stay `failed` rather than vanish as `missing`.
- */
-function isMissingDatabaseError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  const fields = error as Record<string, unknown>;
-  if (typeof fields["errcode"] === "number") return fields["errcode"] === 14;
-  if (typeof fields["code"] === "string" && fields["code"].includes("CANTOPEN")) return true;
-  const message = fields["message"];
-  return typeof message === "string" && /unable to open database file|no such file/i.test(message);
 }

@@ -120,7 +120,11 @@ function claimSources(environments: readonly EnvironmentUsage[]): {
 
   for (const environment of ordered) {
     for (const source of environment.summary.sources) {
-      if (source.status === "missing") continue;
+      // Only a source that actually contributed buckets may own a directory.
+      // A failed scan claims nothing: otherwise an environment that could not
+      // read a store would steal the fingerprint from one that could, and that
+      // usage would silently vanish instead of merely losing a race.
+      if (source.status === "missing" || source.status === "failed") continue;
       const key = fingerprintKey(source.fingerprint);
       if (ownerByFingerprint.has(key)) {
         duplicates.push(`${environment.label}: ${source.fingerprint.resolvedHomePath}`);
