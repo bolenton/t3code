@@ -1464,24 +1464,28 @@ export function PullRequestDetailPanel({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Button
-                        size="xs"
-                        variant="warning-outline"
-                        disabled={actionPending}
-                        onClick={() => setConfirmation({ open: true, action: "approve-workflows" })}
-                        aria-label={
-                          pendingAction === "approve-workflows"
-                            ? "Approving..."
-                            : "Approve workflows to run"
-                        }
-                      >
-                        <PlayIcon aria-hidden className="size-3.5" />
-                        <span className="@max-[40rem]/pr-header:hidden">
-                          {pendingAction === "approve-workflows"
-                            ? "Approving..."
-                            : "Approve workflows to run"}
-                        </span>
-                      </Button>
+                      <span className="inline-flex shrink-0">
+                        <Button
+                          size="xs"
+                          variant="warning-outline"
+                          disabled={actionPending}
+                          onClick={() =>
+                            setConfirmation({ open: true, action: "approve-workflows" })
+                          }
+                          aria-label={
+                            pendingAction === "approve-workflows"
+                              ? "Approving..."
+                              : "Approve workflows to run"
+                          }
+                        >
+                          <PlayIcon aria-hidden className="size-3.5" />
+                          <span className="@max-[40rem]/pr-header:hidden">
+                            {pendingAction === "approve-workflows"
+                              ? "Approving..."
+                              : "Approve workflows to run"}
+                          </span>
+                        </Button>
+                      </span>
                     }
                   />
                   <TooltipPopup side="top">
@@ -1497,14 +1501,20 @@ export function PullRequestDetailPanel({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Badge size="control" variant="info">
+                      <Badge
+                        size="control"
+                        variant="info"
+                        role="img"
+                        aria-label={armedAutoMergeLabel}
+                      >
                         <GitMergeIcon aria-hidden className="size-3.5" />
                         <span className="@max-[30rem]/pr-header:hidden">{armedAutoMergeLabel}</span>
                       </Badge>
                     }
                   />
                   <TooltipPopup side="top">
-                    The host will merge this on its own once its requirements are met
+                    {armedAutoMergeLabel}: the host will merge this on its own once its requirements
+                    are met
                   </TooltipPopup>
                 </Tooltip>
               ) : null}
@@ -1512,18 +1522,22 @@ export function PullRequestDetailPanel({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Button
-                        size="xs"
-                        variant="destructive-outline"
-                        disabled={handoff !== null}
-                        onClick={startResolveConflicts}
-                        aria-label={handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"}
-                      >
-                        <TriangleAlertIcon aria-hidden className="size-3.5" />
-                        <span className="@max-[30rem]/pr-header:hidden">
-                          {handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"}
-                        </span>
-                      </Button>
+                      <span className="inline-flex shrink-0">
+                        <Button
+                          size="xs"
+                          variant="destructive-outline"
+                          disabled={handoff !== null}
+                          onClick={startResolveConflicts}
+                          aria-label={
+                            handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"
+                          }
+                        >
+                          <TriangleAlertIcon aria-hidden className="size-3.5" />
+                          <span className="@max-[30rem]/pr-header:hidden">
+                            {handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"}
+                          </span>
+                        </Button>
+                      </span>
                     }
                   />
                   <TooltipPopup side="top">
@@ -1534,18 +1548,20 @@ export function PullRequestDetailPanel({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Button
-                        size="xs"
-                        disabled={actionPending}
-                        onClick={() => void perform("ready")}
-                        aria-label="Ready for review"
-                      >
-                        <GitPullRequestIcon
-                          aria-hidden
-                          className="hidden size-3.5 @max-[30rem]/pr-header:inline"
-                        />
-                        <span className="@max-[30rem]/pr-header:hidden">Ready for review</span>
-                      </Button>
+                      <span className="inline-flex shrink-0">
+                        <Button
+                          size="xs"
+                          disabled={actionPending}
+                          onClick={() => void perform("ready")}
+                          aria-label="Ready for review"
+                        >
+                          <GitPullRequestIcon
+                            aria-hidden
+                            className="hidden size-3.5 @max-[30rem]/pr-header:inline"
+                          />
+                          <span className="@max-[30rem]/pr-header:hidden">Ready for review</span>
+                        </Button>
+                      </span>
                     }
                   />
                   <TooltipPopup side="top">Ready for review</TooltipPopup>
@@ -1554,23 +1570,27 @@ export function PullRequestDetailPanel({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Button
-                        size="xs"
-                        disabled={actionPending}
-                        onClick={() => setConfirmation({ open: true, action: "enable-auto-merge" })}
-                        aria-label={
-                          pendingAction === "enable-auto-merge"
-                            ? "Enabling..."
-                            : pendingAutoMergeLabel
-                        }
-                      >
-                        <GitMergeIcon aria-hidden className="size-3.5" />
-                        <span className="@max-[30rem]/pr-header:hidden">
-                          {pendingAction === "enable-auto-merge"
-                            ? "Enabling..."
-                            : pendingAutoMergeLabel}
-                        </span>
-                      </Button>
+                      <span className="inline-flex shrink-0">
+                        <Button
+                          size="xs"
+                          disabled={actionPending}
+                          onClick={() =>
+                            setConfirmation({ open: true, action: "enable-auto-merge" })
+                          }
+                          aria-label={
+                            pendingAction === "enable-auto-merge"
+                              ? "Enabling..."
+                              : pendingAutoMergeLabel
+                          }
+                        >
+                          <GitMergeIcon aria-hidden className="size-3.5" />
+                          <span className="@max-[30rem]/pr-header:hidden">
+                            {pendingAction === "enable-auto-merge"
+                              ? "Enabling..."
+                              : pendingAutoMergeLabel}
+                          </span>
+                        </Button>
+                      </span>
                     }
                   />
                   <TooltipPopup side="top">
@@ -1581,36 +1601,44 @@ export function PullRequestDetailPanel({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Badge size="control" variant="info">
+                      <Badge
+                        size="control"
+                        variant="info"
+                        role="img"
+                        aria-label={armedAutoMergeLabel}
+                      >
                         <GitMergeIcon aria-hidden className="size-3.5" />
                         <span className="@max-[30rem]/pr-header:hidden">{armedAutoMergeLabel}</span>
                       </Badge>
                     }
                   />
                   <TooltipPopup side="top">
-                    The host will merge this on its own once its requirements are met
+                    {armedAutoMergeLabel}: the host will merge this on its own once its requirements
+                    are met
                   </TooltipPopup>
                 </Tooltip>
               ) : primaryAction === "merge" ? (
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Button
-                        size="xs"
-                        disabled={actionPending}
-                        onClick={() => setConfirmation({ open: true, action: "merge" })}
-                        aria-label={
-                          pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel
-                        }
-                      >
-                        <GitMergeIcon
-                          aria-hidden
-                          className="hidden size-3.5 @max-[30rem]/pr-header:inline"
-                        />
-                        <span className="@max-[30rem]/pr-header:hidden">
-                          {pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel}
-                        </span>
-                      </Button>
+                      <span className="inline-flex shrink-0">
+                        <Button
+                          size="xs"
+                          disabled={actionPending}
+                          onClick={() => setConfirmation({ open: true, action: "merge" })}
+                          aria-label={
+                            pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel
+                          }
+                        >
+                          <GitMergeIcon
+                            aria-hidden
+                            className="hidden size-3.5 @max-[30rem]/pr-header:inline"
+                          />
+                          <span className="@max-[30rem]/pr-header:hidden">
+                            {pendingAction === "merge" ? "Merging..." : selectedMergeMethodLabel}
+                          </span>
+                        </Button>
+                      </span>
                     }
                   />
                   <TooltipPopup side="top">
