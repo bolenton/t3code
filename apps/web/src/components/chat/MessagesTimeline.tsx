@@ -2536,10 +2536,7 @@ function ToolActivityIconView(props: {
   muted: boolean;
 }) {
   const { resolvedTheme } = use(TimelineRowCtx);
-  const fallbackClassName = cn(
-    props.className,
-    props.muted && "opacity-70 [html:not(.dark)_&]:brightness-[.6]",
-  );
+  const fallbackClassName = cn(props.className, props.muted && "opacity-70 light:brightness-[.6]");
   if (!props.icon) {
     return <WorkEntryIcon name={props.fallbackName} className={fallbackClassName} />;
   }
@@ -2599,10 +2596,7 @@ function NativeAppToolActivityIcon(props: {
     return (
       <WorkEntryIcon
         name={props.fallbackName}
-        className={cn(
-          props.className,
-          props.muted && "opacity-70 [html:not(.dark)_&]:brightness-[.6]",
-        )}
+        className={cn(props.className, props.muted && "opacity-70 light:brightness-[.6]")}
       />
     );
   }
@@ -2647,10 +2641,7 @@ function ToolActivityImageIcon(props: {
       {displayedSrc === null ? (
         <WorkEntryIcon
           name={props.fallbackName}
-          className={cn(
-            props.className,
-            props.muted && "opacity-70 [html:not(.dark)_&]:brightness-[.6]",
-          )}
+          className={cn(props.className, props.muted && "opacity-70 light:brightness-[.6]")}
         />
       ) : null}
       {displayedSrc ? (
@@ -2667,10 +2658,7 @@ function ToolActivityImageIcon(props: {
             aria-hidden
             decoding="async"
             referrerPolicy="no-referrer"
-            className={cn(
-              "block size-full object-contain",
-              props.muted && "[html:not(.dark)_&]:brightness-[.6]",
-            )}
+            className={cn("block size-full object-contain", props.muted && "light:brightness-[.6]")}
             onError={() => handleLoadError(displayedSrc)}
           />
         </span>
