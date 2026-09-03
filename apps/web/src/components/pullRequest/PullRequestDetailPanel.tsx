@@ -1499,9 +1499,7 @@ export function PullRequestDetailPanel({
                     render={
                       <Badge size="control" variant="info">
                         <GitMergeIcon aria-hidden className="size-3.5" />
-                        <span className="@max-[30rem]/pr-header:hidden">
-                          {armedAutoMergeLabel}
-                        </span>
+                        <span className="@max-[30rem]/pr-header:hidden">{armedAutoMergeLabel}</span>
                       </Badge>
                     }
                   />
@@ -1519,9 +1517,7 @@ export function PullRequestDetailPanel({
                         variant="destructive-outline"
                         disabled={handoff !== null}
                         onClick={startResolveConflicts}
-                        aria-label={
-                          handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"
-                        }
+                        aria-label={handoff === "conflicts" ? "Preparing..." : "Resolve conflicts"}
                       >
                         <TriangleAlertIcon aria-hidden className="size-3.5" />
                         <span className="@max-[30rem]/pr-header:hidden">
@@ -1587,9 +1583,7 @@ export function PullRequestDetailPanel({
                     render={
                       <Badge size="control" variant="info">
                         <GitMergeIcon aria-hidden className="size-3.5" />
-                        <span className="@max-[30rem]/pr-header:hidden">
-                          {armedAutoMergeLabel}
-                        </span>
+                        <span className="@max-[30rem]/pr-header:hidden">{armedAutoMergeLabel}</span>
                       </Badge>
                     }
                   />
