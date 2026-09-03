@@ -173,6 +173,7 @@ import {
   openUrlInPreview,
   BrowserPreviewUnavailableError,
 } from "../browser/openFileInPreview";
+import { getBrowserLinkTargetPreference, resolveLinkTarget } from "../browser/browserLinkTarget";
 
 interface ChatMarkdownProps {
   text: string;
@@ -2472,9 +2473,33 @@ function ChatMarkdown({
                 }
                 // A link to a change request in a workspace project opens beside the
                 // conversation instead of in a browser: it is the thing being talked about, and
-                // the panel it opens offers the browser as one of its actions. Anything else is
-                // an ordinary link and keeps the `_blank` the shell already handles.
-                if (href) openChangeRequestLink(event, href);
+                // the panel it opens offers the browser as one of its actions.
+                if (!href || openChangeRequestLink(event, href)) return;
+                // Anything else follows the "Open links in" setting. The system browser
+                // keeps the `_blank` the shell already handles; the in-app browser needs
+                // the click intercepted here. A modifier click is the way out of the
+                // in-app default, so it is left to the shell too.
+                if (
+                  event.defaultPrevented ||
+                  resolveLinkTarget({
+                    url: href,
+                    event,
+                    preference: getBrowserLinkTargetPreference(),
+                    canOpenInApp: canOpenInPreview,
+                  }) !== "app"
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                void openExternalLinkInPreview(href).then((result) => {
+                  if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+                    reportMarkdownActionFailure(
+                      { operation: "open-link-in-preview", target: href },
+                      result.cause,
+                    );
+                  }
+                });
               }}
               onContextMenu={(event) => {
                 if (!href || !faviconHost) return;
