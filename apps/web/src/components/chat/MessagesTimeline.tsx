@@ -1784,7 +1784,8 @@ function LiveActivityContent({
           <ToolActivityIconView
             icon={failed && !isSpecialToolIcon ? undefined : toolIcon}
             fallbackName={resolvedIconName}
-            className={cn("block size-4 shrink-0 stroke-[1.8]", !highlighted && "opacity-70")}
+            className="block size-4 shrink-0 stroke-[1.8]"
+            muted={!highlighted}
           />
         </span>
       ) : null}
@@ -1879,7 +1880,8 @@ function WorkGroupToggleTimelineRow({
           fallbackName={
             row.summaryToolIcon ?? row.toolSurface ?? toolGroupSummaryIconName(row.summaryKind)
           }
-          className="size-4 shrink-0 stroke-[1.8] opacity-70"
+          className="size-4 shrink-0 stroke-[1.8]"
+          muted
         />
       </span>
       <span className="min-w-0 flex-1 truncate text-secondary-label">{row.summary}</span>
@@ -2475,10 +2477,15 @@ function ToolActivityIconView(props: {
   icon: ToolActivityIcon | undefined;
   fallbackName: WorkEntryIconName;
   className: string;
+  muted: boolean;
 }) {
   const { resolvedTheme } = use(TimelineRowCtx);
+  const fallbackClassName = cn(
+    props.className,
+    props.muted && "opacity-70 [html:not(.dark)_&]:brightness-[.6]",
+  );
   if (!props.icon) {
-    return <WorkEntryIcon name={props.fallbackName} className={props.className} />;
+    return <WorkEntryIcon name={props.fallbackName} className={fallbackClassName} />;
   }
   if (props.icon._tag === "website") {
     const src = toolActivityFaviconUrl(props.icon, resolvedTheme, 32);
@@ -2489,9 +2496,10 @@ function ToolActivityIconView(props: {
         src={src}
         fallbackName={props.fallbackName}
         className={props.className}
+        muted={props.muted}
       />
     ) : (
-      <WorkEntryIcon name={props.fallbackName} className={props.className} />
+      <WorkEntryIcon name={props.fallbackName} className={fallbackClassName} />
     );
   }
   if (props.icon._tag === "themed-logo") {
@@ -2506,6 +2514,7 @@ function ToolActivityIconView(props: {
         src={src}
         fallbackName={props.fallbackName}
         className={props.className}
+        muted={props.muted}
       />
     );
   }
@@ -2514,6 +2523,7 @@ function ToolActivityIconView(props: {
       app={props.icon.app}
       fallbackName={props.fallbackName}
       className={props.className}
+      muted={props.muted}
     />
   );
 }
@@ -2522,6 +2532,7 @@ function NativeAppToolActivityIcon(props: {
   app: Extract<ToolActivityIcon, { readonly _tag: "native-app" }>["app"];
   fallbackName: WorkEntryIconName;
   className: string;
+  muted: boolean;
 }) {
   const { activeThreadEnvironmentId } = use(TimelineRowCtx);
   const asset = useAssetUrlState(activeThreadEnvironmentId, {
@@ -2529,7 +2540,15 @@ function NativeAppToolActivityIcon(props: {
     app: props.app,
   });
   if (asset._tag !== "Success") {
-    return <WorkEntryIcon name={props.fallbackName} className={props.className} />;
+    return (
+      <WorkEntryIcon
+        name={props.fallbackName}
+        className={cn(
+          props.className,
+          props.muted && "opacity-70 [html:not(.dark)_&]:brightness-[.6]",
+        )}
+      />
+    );
   }
   const cacheKey = getProjectFaviconCacheKey(
     activeThreadEnvironmentId,
@@ -2543,6 +2562,7 @@ function NativeAppToolActivityIcon(props: {
       src={asset.url}
       fallbackName={props.fallbackName}
       className={props.className}
+      muted={props.muted}
     />
   );
 }
@@ -2554,6 +2574,7 @@ function ToolActivityImageIcon(props: {
   src: string;
   fallbackName: WorkEntryIconName;
   className: string;
+  muted: boolean;
 }) {
   const [displayedSrc, setDisplayedSrc] = useState<string | null>(
     () => loadedToolActivityIconSrcs.get(props.cacheKey) ?? null,
@@ -2568,18 +2589,35 @@ function ToolActivityImageIcon(props: {
   return (
     <>
       {displayedSrc === null ? (
-        <WorkEntryIcon name={props.fallbackName} className={props.className} />
+        <WorkEntryIcon
+          name={props.fallbackName}
+          className={cn(
+            props.className,
+            props.muted && "opacity-70 [html:not(.dark)_&]:brightness-[.6]",
+          )}
+        />
       ) : null}
       {displayedSrc ? (
-        <img
-          src={displayedSrc}
-          alt=""
-          aria-hidden
-          decoding="async"
-          referrerPolicy="no-referrer"
-          className={cn(props.className, "rounded-[3px] bg-background object-contain")}
-          onError={() => handleLoadError(displayedSrc)}
-        />
+        <span
+          className={cn(
+            props.className,
+            "inline-block overflow-hidden rounded-[3px] bg-background",
+            props.muted && "opacity-70",
+          )}
+        >
+          <img
+            src={displayedSrc}
+            alt=""
+            aria-hidden
+            decoding="async"
+            referrerPolicy="no-referrer"
+            className={cn(
+              "block size-full object-contain",
+              props.muted && "[html:not(.dark)_&]:brightness-[.6]",
+            )}
+            onError={() => handleLoadError(displayedSrc)}
+          />
+        </span>
       ) : null}
       {isLoading ? (
         <img
@@ -2966,7 +3004,8 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
                 : (workEntry.toolIcon ?? workEntry.toolSource?.icon)
             }
             fallbackName={entryIconName}
-            className="block size-4 shrink-0 stroke-[1.8] opacity-70"
+            className="block size-4 shrink-0 stroke-[1.8]"
+            muted
           />
         </span>
         <div className="flex min-w-0 flex-1 items-center gap-1.5">

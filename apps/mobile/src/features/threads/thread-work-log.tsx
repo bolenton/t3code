@@ -937,6 +937,7 @@ function ToolActivityIconView(props: {
         source={source}
         fallback={props.fallback}
         color={props.fallbackColor}
+        themeAppearance={props.themeAppearance}
       />
     ) : (
       <WorkLogIcon icon={props.fallback} color={props.fallbackColor} />
@@ -953,6 +954,7 @@ function ToolActivityIconView(props: {
         source={source}
         fallback={props.fallback}
         color={props.fallbackColor}
+        themeAppearance={props.themeAppearance}
       />
     );
   }
@@ -962,6 +964,7 @@ function ToolActivityIconView(props: {
       app={props.icon.app}
       fallback={props.fallback}
       color={props.fallbackColor}
+      themeAppearance={props.themeAppearance}
     />
   );
 }
@@ -971,13 +974,20 @@ function NativeAppToolActivityIcon(props: {
   readonly app: Extract<ToolActivityIcon, { readonly _tag: "native-app" }>["app"];
   readonly fallback: WorkContentIcon;
   readonly color: ColorValue;
+  readonly themeAppearance: "light" | "dark";
 }) {
   const source = useAssetUrl(props.environmentId, {
     _tag: "native-app-icon",
     app: props.app,
   });
   return source ? (
-    <ToolActivityImage key={source} source={source} fallback={props.fallback} color={props.color} />
+    <ToolActivityImage
+      key={source}
+      source={source}
+      fallback={props.fallback}
+      color={props.color}
+      themeAppearance={props.themeAppearance}
+    />
   ) : (
     <WorkLogIcon icon={props.fallback} color={props.color} />
   );
@@ -987,6 +997,7 @@ function ToolActivityImage(props: {
   readonly source: string;
   readonly fallback: WorkContentIcon;
   readonly color: ColorValue;
+  readonly themeAppearance: "light" | "dark";
 }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -994,14 +1005,21 @@ function ToolActivityImage(props: {
     <View className="h-4 w-4 items-center justify-center overflow-hidden rounded-[3px] bg-background">
       {!loaded || failed ? <WorkLogIcon icon={props.fallback} color={props.color} /> : null}
       {!failed ? (
-        <Image
-          source={props.source}
-          cachePolicy="memory-disk"
-          contentFit="contain"
-          style={[StyleSheet.absoluteFill, { opacity: loaded ? 1 : 0 }]}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-        />
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            props.themeAppearance === "light" ? { filter: [{ brightness: 0.6 }] } : undefined,
+          ]}
+        >
+          <Image
+            source={props.source}
+            cachePolicy="memory-disk"
+            contentFit="contain"
+            style={[StyleSheet.absoluteFill, { opacity: loaded ? 0.7 : 0 }]}
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+          />
+        </View>
       ) : null}
     </View>
   );
