@@ -346,6 +346,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { serverEnvironment } from "../../state/server";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
 
+const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
+
 const runtimeModeConfig: Record<
   RuntimeMode,
   { label: string; description: string; icon: LucideIcon }
@@ -739,7 +741,6 @@ export interface ChatComposerProps {
   setThreadError: (threadId: ThreadId | null, error: string | null) => void;
   onExpandImage: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
-  openingVideoAttachmentId: string | null;
 }
 
 // --------------------------------------------------------------------------
@@ -818,7 +819,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     setThreadError,
     onExpandImage,
     onFileOpen,
-    openingVideoAttachmentId,
   } = props;
   const activeTasksProgress = props.threadSyncPhase === null ? props.activeTasksProgress : null;
   const activeTaskSteps = props.threadSyncPhase === null ? props.activeTaskSteps : null;
@@ -1130,6 +1130,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     reportFailure: false,
   });
   const workspaceRefreshKeyRef = useRef<string | null>(null);
+  const workspaceRefreshRetryRef = useRef<{ key: string; notBefore: number } | null>(null);
   const hadWorkspaceSnapshotRef = useRef(false);
   useEffect(() => {
     const hasWorkspaceSnapshot = Boolean(
@@ -1138,6 +1139,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
     if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = null;
+      workspaceRefreshRetryRef.current = null;
     }
     hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
   }, [gitCwd, selectedProviderStatus]);
@@ -1150,28 +1152,34 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (workspaceRefreshKeyRef.current === key) return;
     if (hasWorkspaceSnapshot) {
       workspaceRefreshKeyRef.current = key;
+      workspaceRefreshRetryRef.current = null;
       return;
     }
+    const retry = workspaceRefreshRetryRef.current;
+    if (retry?.key === key && Date.now() < retry.notBefore) return;
     workspaceRefreshKeyRef.current = key;
+    const retryLater = () => {
+      if (workspaceRefreshKeyRef.current !== key) return;
+      workspaceRefreshKeyRef.current = null;
+      workspaceRefreshRetryRef.current = {
+        key,
+        notBefore: Date.now() + WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS,
+      };
+    };
     void refreshProviders({
       environmentId,
       input: { instanceId: selectedProviderEntry.instanceId, cwd: gitCwd },
-    }).then(
-      (result) => {
-        const hasWorkspaceSnapshot =
-          result._tag === "Success" &&
-          result.value.providers
-            .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
-            ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd);
-        if (!hasWorkspaceSnapshot && workspaceRefreshKeyRef.current === key) {
-          workspaceRefreshKeyRef.current = null;
-        }
-      },
-      () => {
-        if (workspaceRefreshKeyRef.current === key) workspaceRefreshKeyRef.current = null;
-      },
-    );
-  }, [environmentId, gitCwd, refreshProviders, selectedProviderEntry]);
+    }).then((result) => {
+      const hasWorkspaceSnapshot =
+        result._tag === "Success" &&
+        result.value.providers
+          .find((provider) => provider.instanceId === selectedProviderEntry.instanceId)
+          ?.workspaceSnapshots?.some((snapshot) => snapshot.cwd === gitCwd);
+      if (!hasWorkspaceSnapshot && workspaceRefreshKeyRef.current === key) {
+        retryLater();
+      }
+    }, retryLater);
+  }, [environmentId, gitCwd, prompt, refreshProviders, selectedProviderEntry]);
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
     () => selectedProviderEntry?.models ?? [],
     [selectedProviderEntry],
@@ -4010,7 +4018,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         maxFileAttachmentBytes !== null &&
                         file.sizeBytes <= maxFileAttachmentBytes;
                       const upload = fileCanUpload ? uploadsByImageId[file.id] : undefined;
-                      const isOpening = file.uploadedAttachmentId === openingVideoAttachmentId;
                       return (
                         <div
                           key={file.id}
@@ -4018,12 +4025,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         >
                           <button
                             type="button"
-                            className="flex h-full w-full cursor-zoom-in flex-col items-center justify-center gap-1 px-1 text-white aria-disabled:cursor-default aria-disabled:opacity-50"
-                            aria-busy={isOpening || undefined}
-                            aria-disabled={isOpening || undefined}
-                            aria-label={`${isOpening ? "Loading" : "Play"} ${file.name}`}
+                            className="flex h-full w-full cursor-zoom-in flex-col items-center justify-center gap-1 px-1 text-white"
+                            aria-label={`Play ${file.name}`}
                             onClick={() => {
-                              if (isOpening) return;
                               if (file.file !== null) {
                                 const preview = buildExpandedImagePreview([file], file.id);
                                 if (preview) onExpandImage(preview);
@@ -4039,11 +4043,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/10" />
                               </>
                             )}
-                            {isOpening ? (
-                              <span className="relative z-10 text-[10px]">Loading…</span>
-                            ) : (
-                              <PlayIcon className="relative z-10 size-4 fill-current drop-shadow-md" />
-                            )}
+                            <PlayIcon className="relative z-10 size-4 fill-current drop-shadow-md" />
                           </button>
                           {upload?.status === "uploading" && (
                             <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-background/85 px-1 text-center text-[10px] text-foreground">

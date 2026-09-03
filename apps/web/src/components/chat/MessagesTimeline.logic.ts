@@ -2,6 +2,7 @@ import * as Equal from "effect/Equal";
 import { renderCodexDirectivesForCopy } from "@t3tools/client-runtime/codex-markdown-directives";
 import { commandProgramName } from "@t3tools/client-runtime/work-log/command-label";
 import {
+  liveActivityToolStatus,
   normalizeCompactToolLabel,
   omitSupersededLifecycleMarkers,
   resolveWorkEntryToolPresentation,
@@ -65,14 +66,14 @@ export function liveWorkEntryLabel(
   workspaceRoot: string | undefined,
   active: boolean,
 ) {
-  const toolPresentation = resolveWorkEntryToolPresentation(
-    entry,
-    active ? "inProgress" : "completed",
-  );
+  const status = liveActivityToolStatus(entry.toolLifecycleStatus, active);
+  const toolPresentation = resolveWorkEntryToolPresentation({
+    ...entry,
+    toolLifecycleStatus: status,
+  });
   if (toolPresentation) return toolPresentation.displayName;
   const command = entry.command?.trim();
   if (command) {
-    const status = entry.toolLifecycleStatus ?? (active ? "inProgress" : "completed");
     const verb =
       status === "inProgress"
         ? "Running"
@@ -145,23 +146,21 @@ export interface TimelineEndState {
  */
 export const TIMELINE_FOLLOW_REARM_THRESHOLD_PX = 40;
 
-export function resolveTimelineIsAtEnd(
-  state: TimelineEndState | undefined,
-  endInset = 0,
-): boolean | undefined {
+export function resolveTimelineIsAtEnd(state: TimelineEndState | undefined): boolean | undefined {
   if (!state) {
     return undefined;
-  }
-  if (state.isAtEnd) {
-    return true;
   }
   const { contentLength, scroll, scrollLength } = state;
   if (contentLength === undefined || scroll === undefined || scrollLength === undefined) {
     return state.isAtEnd;
   }
-  // contentLength includes the end inset (composer overlay), so subtract it to
-  // measure the distance to the real content bottom.
-  return contentLength - scroll - scrollLength - endInset <= TIMELINE_FOLLOW_REARM_THRESHOLD_PX;
+  // contentLength includes the composer inset spacer, but the composer hides
+  // the same amount of viewport, so the inset cancels: plain
+  // contentLength - scroll - scrollLength is the gap between the last real row
+  // and the visible edge above the composer. LegendList's own isAtEnd subtracts
+  // the inset and is true anywhere in the bottom composer-height band, so it is
+  // only a fallback here, never a short-circuit.
+  return contentLength - scroll - scrollLength <= TIMELINE_FOLLOW_REARM_THRESHOLD_PX;
 }
 
 export function shouldPreserveAssistantLineBreaks(text: string): boolean {
